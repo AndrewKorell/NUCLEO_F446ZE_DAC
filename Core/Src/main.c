@@ -18,7 +18,6 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include <math.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -42,6 +41,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 DAC_HandleTypeDef hdac;
+DMA_HandleTypeDef hdma_dac1;
 
 TIM_HandleTypeDef htim6;
 
@@ -57,6 +57,7 @@ PCD_HandleTypeDef hpcd_USB_OTG_FS;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_DAC_Init(void);
 static void MX_TIM6_Init(void);
 static void MX_USART3_UART_Init(void);
@@ -101,6 +102,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_DAC_Init();
   MX_TIM6_Init();
   MX_USART3_UART_Init();
@@ -112,19 +114,20 @@ int main(void)
   uint8_t dataBuffer[bufferSize];
   HAL_UART_Receive_IT(&huart2, dataBuffer, bufferSize);
 
-  HAL_TIM_Base_Start_IT(&htim6);
+
+
+
+  const uint32_t data_stream[16] = { 2048, 2831, 3495, 3939, 4095, 3940, 3497, 2834, 2051, 1267, 602, 157, 0, 153, 595, 1258 };
+  //const uint16_t data_stream2[16] = { 2048, 2048, 2048, 2048, 2048, 2048, 2048, 2048, 2048, 2048, 2048, 2048, 2048, 2048, 2048, 2048 };
+  //const uint32_t data_stream3[16] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  uint16_t sample = 0;
-  uint16_t no_samples = 32;
+  HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, (uint32_t *) data_stream, 16, DAC_ALIGN_12B_R);
+  HAL_TIM_Base_Start_IT(&htim6);
 
-  uint16_t sample_collect[no_samples];
-
-  float temp_a = ((2.0 * 3.14)/ ((float) no_samples));
-  float temp_b = ((0xfff+1)/2);
-  uint16_t out_value = 2048;
 
   while (1)
   {
@@ -132,20 +135,7 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-	  sample_collect[sample] = out_value;
-	  //while((int) hdac.State != (int)HAL_DAC_STATE_READY);
-	  HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, out_value);
-	  HAL_DAC_Start(&hdac, DAC_CHANNEL_1);
 
-	  uint32_t current_tick = HAL_GetTick();
-	  //while((int) hdac.State == (int)HAL_DAC_STATE_BUSY);
-	  while(HAL_GetTick() < (current_tick+2));
-	  sample = sample + 1;
-	  if(sample >= no_samples)
-	  {
-		  sample = 0;
-	  }
-	  out_value = (uint16_t) ((sin(sample * temp_a) + 1) * temp_b);
 
 
 
@@ -228,16 +218,9 @@ static void MX_DAC_Init(void)
 
   /** DAC channel OUT1 config
   */
-  sConfig.DAC_Trigger = DAC_TRIGGER_NONE;
+  sConfig.DAC_Trigger = DAC_TRIGGER_T6_TRGO;
   sConfig.DAC_OutputBuffer = DAC_OUTPUTBUFFER_ENABLE;
   if (HAL_DAC_ConfigChannel(&hdac, &sConfig, DAC_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** DAC channel OUT2 config
-  */
-  if (HAL_DAC_ConfigChannel(&hdac, &sConfig, DAC_CHANNEL_2) != HAL_OK)
   {
     Error_Handler();
   }
@@ -267,13 +250,13 @@ static void MX_TIM6_Init(void)
   htim6.Instance = TIM6;
   htim6.Init.Prescaler = 0;
   htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim6.Init.Period = 65535;
+  htim6.Init.Period = 261;
   htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
   {
     Error_Handler();
   }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim6, &sMasterConfig) != HAL_OK)
   {
@@ -383,6 +366,22 @@ static void MX_USB_OTG_FS_PCD_Init(void)
   /* USER CODE BEGIN USB_OTG_FS_Init 2 */
 
   /* USER CODE END USB_OTG_FS_Init 2 */
+
+}
+
+/**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Stream5_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream5_IRQn);
 
 }
 
