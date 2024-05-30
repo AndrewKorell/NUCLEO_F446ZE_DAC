@@ -18,11 +18,11 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include <math.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "stm32f4xx_hal.h"
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -41,7 +41,11 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+ADC_HandleTypeDef hadc1;
+DMA_HandleTypeDef hdma_adc1;
+
 DAC_HandleTypeDef hdac;
+DMA_HandleTypeDef hdma_dac1;
 
 TIM_HandleTypeDef htim6;
 
@@ -57,11 +61,13 @@ PCD_HandleTypeDef hpcd_USB_OTG_FS;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_DAC_Init(void);
 static void MX_TIM6_Init(void);
 static void MX_USART3_UART_Init(void);
 static void MX_USB_OTG_FS_PCD_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_ADC1_Init(void);
 /* USER CODE BEGIN PFP */
 
 static void UART2_Receive(uint8_t *rxbuffer);
@@ -69,6 +75,14 @@ static void UART2_Receive(uint8_t *rxbuffer);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+uint16_t adc1_data[1024];
+uint16_t zero_crossing_count = 0;
+uint16_t adc_data;
+uint16_t adc_max = 2048;
+uint16_t adc_min = 2048;
+const uint32_t adc_thres = 200;
+uint16_t adc_thr_stp = 0;
+uint16_t adc_pp;
 
 /* USER CODE END 0 */
 
@@ -101,30 +115,34 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_DAC_Init();
   MX_TIM6_Init();
   MX_USART3_UART_Init();
   MX_USB_OTG_FS_PCD_Init();
   MX_USART2_UART_Init();
+  MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
 
   uint16_t bufferSize = 10;
   uint8_t dataBuffer[bufferSize];
   HAL_UART_Receive_IT(&huart2, dataBuffer, bufferSize);
 
+  const uint32_t sinewave_data[32] = {2048, 2447, 2831, 3185, 3495, 3750, 3939, 4056, 4095, 4057, 3940, 3752, 3497, 3188, 2834, 2450, 2051, 1651, 1267, 913, 602, 347, 157, 40, 0, 38, 153, 342, 595, 905, 1258, 1642 };
+  HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, (uint32_t *) sinewave_data, 32, DAC_ALIGN_12B_R);
   HAL_TIM_Base_Start_IT(&htim6);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  uint16_t sample = 0;
-  uint16_t no_samples = 32;
+  //uint16_t sample = 0;
+  //uint16_t no_samples = 32;
 
-  uint16_t sample_collect[no_samples];
+  //uint16_t sample_collect[no_samples];
 
-  float temp_a = ((2.0 * 3.14)/ ((float) no_samples));
-  float temp_b = ((0xfff+1)/2);
-  uint16_t out_value = 2048;
+  //float temp_a = ((2.0 * 3.14)/ ((float) no_samples));
+  //float temp_b = ((0xfff+1)/2);
+  //uint16_t out_value = 2048;
 
   while (1)
   {
@@ -132,20 +150,20 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-	  sample_collect[sample] = out_value;
+	  //sample_collect[sample] = out_value;
 	  //while((int) hdac.State != (int)HAL_DAC_STATE_READY);
-	  HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, out_value);
-	  HAL_DAC_Start(&hdac, DAC_CHANNEL_1);
+	  //HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, out_value);
+	  //HAL_DAC_Start(&hdac, DAC_CHANNEL_1);
 
-	  uint32_t current_tick = HAL_GetTick();
+	  //uint32_t current_tick = HAL_GetTick();
 	  //while((int) hdac.State == (int)HAL_DAC_STATE_BUSY);
-	  while(HAL_GetTick() < (current_tick+2));
-	  sample = sample + 1;
-	  if(sample >= no_samples)
-	  {
-		  sample = 0;
-	  }
-	  out_value = (uint16_t) ((sin(sample * temp_a) + 1) * temp_b);
+	  //while(HAL_GetTick() < (current_tick+2));
+	  //sample = sample + 1;
+	  //if(sample >= no_samples)
+	  //{
+		//  sample = 0;
+	  //}
+	  //out_value = (uint16_t) ((sin(sample * temp_a) + 1) * temp_b);
 
 
 
@@ -201,6 +219,60 @@ void SystemClock_Config(void)
 }
 
 /**
+  * @brief ADC1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC1_Init(void)
+{
+
+  /* USER CODE BEGIN ADC1_Init 0 */
+
+  /* USER CODE END ADC1_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC1_Init 1 */
+
+  /* USER CODE END ADC1_Init 1 */
+
+  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
+  */
+  hadc1.Instance = ADC1;
+  hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
+  hadc1.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc1.Init.ScanConvMode = DISABLE;
+  hadc1.Init.ContinuousConvMode = ENABLE;
+  hadc1.Init.DiscontinuousConvMode = DISABLE;
+  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc1.Init.NbrOfConversion = 1;
+  hadc1.Init.DMAContinuousRequests = ENABLE;
+  hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  if (HAL_ADC_Init(&hadc1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_3;
+  sConfig.Rank = 1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC1_Init 2 */
+// hadc1.Init.DMAContinuousRequests = ENABLE;
+// hadc1.Init.ContinuousConvMode = ENABLE;
+
+  /* USER CODE END ADC1_Init 2 */
+
+}
+
+/**
   * @brief DAC Initialization Function
   * @param None
   * @retval None
@@ -228,7 +300,7 @@ static void MX_DAC_Init(void)
 
   /** DAC channel OUT1 config
   */
-  sConfig.DAC_Trigger = DAC_TRIGGER_NONE;
+  sConfig.DAC_Trigger = DAC_TRIGGER_T6_TRGO;
   sConfig.DAC_OutputBuffer = DAC_OUTPUTBUFFER_ENABLE;
   if (HAL_DAC_ConfigChannel(&hdac, &sConfig, DAC_CHANNEL_1) != HAL_OK)
   {
@@ -237,6 +309,7 @@ static void MX_DAC_Init(void)
 
   /** DAC channel OUT2 config
   */
+  sConfig.DAC_Trigger = DAC_TRIGGER_NONE;
   if (HAL_DAC_ConfigChannel(&hdac, &sConfig, DAC_CHANNEL_2) != HAL_OK)
   {
     Error_Handler();
@@ -267,13 +340,13 @@ static void MX_TIM6_Init(void)
   htim6.Instance = TIM6;
   htim6.Init.Prescaler = 0;
   htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim6.Init.Period = 65535;
+  htim6.Init.Period = 324;
   htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
   {
     Error_Handler();
   }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim6, &sMasterConfig) != HAL_OK)
   {
@@ -387,6 +460,26 @@ static void MX_USB_OTG_FS_PCD_Init(void)
 }
 
 /**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+  __HAL_RCC_DMA2_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Stream5_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream5_IRQn);
+  /* DMA2_Stream0_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -460,6 +553,48 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 
 void UART2_Receive(uint8_t *rxBuffer)
 {
+
+}
+
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
+{
+  /* Prevent unused argument(s) compilation warning */
+
+	UNUSED(hadc);
+	volatile uint32_t period_step = 0;
+	adc_max = 2048;
+	adc_min = 2048;
+	adc_thr_stp = 0;
+	zero_crossing_count = 0;
+
+	for(uint16_t i = 0; i < 1024; i++)
+	{
+		adc_data = adc1_data[i];
+		//printf("%d\n", adc_data);
+
+		if(adc1_data[i] > adc_max)
+		{
+			adc_max = adc_data;
+			//printf("new max %d", (uint16_t) adc_max);
+		}
+		else if(adc1_data[i] < adc_min)
+		{
+			adc_min = adc1_data[i];
+			//printf("new min %d", (uint16_t) adc_min);
+		}
+
+		//measure period by counting steps between points where adc_thres is crossed
+		//in an upward direction.
+		if((i > 0) && (adc1_data[i] > (adc_thres + 10)) && (adc1_data[i-1] <= (adc_thres - 10)))
+		{
+			zero_crossing_count++;
+			adc_thr_stp = period_step;
+			period_step = 0;
+		}
+		period_step++;
+
+	}
 
 }
 
