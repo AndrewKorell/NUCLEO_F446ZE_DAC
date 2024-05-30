@@ -18,7 +18,6 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include <math.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -46,6 +45,7 @@ ADC_HandleTypeDef hadc1;
 DMA_HandleTypeDef hdma_adc1;
 
 DAC_HandleTypeDef hdac;
+DMA_HandleTypeDef hdma_dac1;
 
 TIM_HandleTypeDef htim6;
 
@@ -61,6 +61,7 @@ PCD_HandleTypeDef hpcd_USB_OTG_FS;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_DAC_Init(void);
 static void MX_TIM6_Init(void);
 static void MX_USART3_UART_Init(void);
@@ -74,12 +75,12 @@ static void UART2_Receive(uint8_t *rxbuffer);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-uint16_t adc1_data[512];
+uint16_t adc1_data[1024];
 uint16_t zero_crossing_count = 0;
 uint16_t adc_data;
 uint16_t adc_max = 2048;
 uint16_t adc_min = 2048;
-const uint32_t adc_thres = 2048;
+const uint32_t adc_thres = 200;
 uint16_t adc_thr_stp = 0;
 uint16_t adc_pp;
 
@@ -114,6 +115,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_DAC_Init();
   MX_TIM6_Init();
   MX_USART3_UART_Init();
@@ -126,19 +128,21 @@ int main(void)
   uint8_t dataBuffer[bufferSize];
   HAL_UART_Receive_IT(&huart2, dataBuffer, bufferSize);
 
+  const uint32_t sinewave_data[32] = {2048, 2447, 2831, 3185, 3495, 3750, 3939, 4056, 4095, 4057, 3940, 3752, 3497, 3188, 2834, 2450, 2051, 1651, 1267, 913, 602, 347, 157, 40, 0, 38, 153, 342, 595, 905, 1258, 1642 };
+  HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, (uint32_t *) sinewave_data, 32, DAC_ALIGN_12B_R);
   HAL_TIM_Base_Start_IT(&htim6);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  uint16_t sample = 0;
-  uint16_t no_samples = 32;
+  //uint16_t sample = 0;
+  //uint16_t no_samples = 32;
 
-  uint16_t sample_collect[no_samples];
+  //uint16_t sample_collect[no_samples];
 
-  float temp_a = ((2.0 * 3.14)/ ((float) no_samples));
-  float temp_b = ((0xfff+1)/2);
-  uint16_t out_value = 2048;
+  //float temp_a = ((2.0 * 3.14)/ ((float) no_samples));
+  //float temp_b = ((0xfff+1)/2);
+  //uint16_t out_value = 2048;
 
   while (1)
   {
@@ -146,20 +150,20 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-	  sample_collect[sample] = out_value;
+	  //sample_collect[sample] = out_value;
 	  //while((int) hdac.State != (int)HAL_DAC_STATE_READY);
-	  HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, out_value);
-	  HAL_DAC_Start(&hdac, DAC_CHANNEL_1);
+	  //HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, out_value);
+	  //HAL_DAC_Start(&hdac, DAC_CHANNEL_1);
 
-	  uint32_t current_tick = HAL_GetTick();
+	  //uint32_t current_tick = HAL_GetTick();
 	  //while((int) hdac.State == (int)HAL_DAC_STATE_BUSY);
-	  while(HAL_GetTick() < (current_tick+2));
-	  sample = sample + 1;
-	  if(sample >= no_samples)
-	  {
-		  sample = 0;
-	  }
-	  out_value = (uint16_t) ((sin(sample * temp_a) + 1) * temp_b);
+	  //while(HAL_GetTick() < (current_tick+2));
+	  //sample = sample + 1;
+	  //if(sample >= no_samples)
+	  //{
+		//  sample = 0;
+	  //}
+	  //out_value = (uint16_t) ((sin(sample * temp_a) + 1) * temp_b);
 
 
 
@@ -296,7 +300,7 @@ static void MX_DAC_Init(void)
 
   /** DAC channel OUT1 config
   */
-  sConfig.DAC_Trigger = DAC_TRIGGER_NONE;
+  sConfig.DAC_Trigger = DAC_TRIGGER_T6_TRGO;
   sConfig.DAC_OutputBuffer = DAC_OUTPUTBUFFER_ENABLE;
   if (HAL_DAC_ConfigChannel(&hdac, &sConfig, DAC_CHANNEL_1) != HAL_OK)
   {
@@ -305,6 +309,7 @@ static void MX_DAC_Init(void)
 
   /** DAC channel OUT2 config
   */
+  sConfig.DAC_Trigger = DAC_TRIGGER_NONE;
   if (HAL_DAC_ConfigChannel(&hdac, &sConfig, DAC_CHANNEL_2) != HAL_OK)
   {
     Error_Handler();
@@ -341,7 +346,7 @@ static void MX_TIM6_Init(void)
   {
     Error_Handler();
   }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim6, &sMasterConfig) != HAL_OK)
   {
@@ -563,7 +568,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 	adc_thr_stp = 0;
 	zero_crossing_count = 0;
 
-	for(uint16_t i = 0; i < 512; i++)
+	for(uint16_t i = 0; i < 1024; i++)
 	{
 		adc_data = adc1_data[i];
 		//printf("%d\n", adc_data);
