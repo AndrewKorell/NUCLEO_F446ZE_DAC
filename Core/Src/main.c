@@ -23,6 +23,7 @@
 /* USER CODE BEGIN Includes */
 #include "stm32f4xx_hal.h"
 #include <stdio.h>
+#include "wave_data.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -76,13 +77,7 @@ static void UART2_Receive(uint8_t *rxbuffer);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 uint16_t adc1_data[1024];
-uint16_t zero_crossing_count = 0;
-uint16_t adc_data;
-uint16_t adc_max = 2048;
-uint16_t adc_min = 2048;
-const uint32_t adc_thres = 200;
-uint16_t adc_thr_stp = 0;
-uint16_t adc_pp;
+
 
 /* USER CODE END 0 */
 
@@ -128,8 +123,7 @@ int main(void)
   uint8_t dataBuffer[bufferSize];
   HAL_UART_Receive_IT(&huart2, dataBuffer, bufferSize);
 
-  const uint32_t sinewave_data[32] = {2048, 2447, 2831, 3185, 3495, 3750, 3939, 4056, 4095, 4057, 3940, 3752, 3497, 3188, 2834, 2450, 2051, 1651, 1267, 913, 602, 347, 157, 40, 0, 38, 153, 342, 595, 905, 1258, 1642 };
-  HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, (uint32_t *) sinewave_data, 32, DAC_ALIGN_12B_R);
+  HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, (uint32_t *) sinewave_data, sinewave_len, DAC_ALIGN_12B_R);
   HAL_TIM_Base_Start_IT(&htim6);
   /* USER CODE END 2 */
 
@@ -562,39 +556,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
   /* Prevent unused argument(s) compilation warning */
 
 	UNUSED(hadc);
-	volatile uint32_t period_step = 0;
-	adc_max = 2048;
-	adc_min = 2048;
-	adc_thr_stp = 0;
-	zero_crossing_count = 0;
 
-	for(uint16_t i = 0; i < 1024; i++)
-	{
-		adc_data = adc1_data[i];
-		//printf("%d\n", adc_data);
-
-		if(adc1_data[i] > adc_max)
-		{
-			adc_max = adc_data;
-			//printf("new max %d", (uint16_t) adc_max);
-		}
-		else if(adc1_data[i] < adc_min)
-		{
-			adc_min = adc1_data[i];
-			//printf("new min %d", (uint16_t) adc_min);
-		}
-
-		//measure period by counting steps between points where adc_thres is crossed
-		//in an upward direction.
-		if((i > 0) && (adc1_data[i] > (adc_thres + 10)) && (adc1_data[i-1] <= (adc_thres - 10)))
-		{
-			zero_crossing_count++;
-			adc_thr_stp = period_step;
-			period_step = 0;
-		}
-		period_step++;
-
-	}
 
 }
 
