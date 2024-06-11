@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <math.h>
+#include "../inc/sine_proc.h"
 
 
 uint16_t zero_crossing_count = 0;
@@ -24,45 +25,42 @@ uint16_t GetPeakToPeak()
 	return adc_max - adc_min;
 }
 
-uint16_t GetRmsRaw(uint16_t* sine_data, uint16_t size)
+
+
+wave_stats GetRmsRaw(uint16_t* sine_data, uint16_t size)
 {
+	//wave_stats wave;
+
 	double acc = 0;
 	double mean = 0;
 	adc_min = 4095;
 	adc_max = 1;
-
+	uint16_t wave_count = 0;
 	bool is_falling = false;
 	bool is_rising = false;
-    uint16_t thres_lo = 0;
-    uint16_t thres_hi = 0;
-    uint16_t hyst = 0;
+    uint16_t thres = 0;
     uint16_t end = 0;
     uint16_t start = 0;
-	uint16_t edge_count = 0;
 	uint16_t x = size;
 
 	//find last edge in sample data, determine if is rising or falling
-	while(x > 0)
+	while(x > 0 && !is_rising && !is_falling)
 	{
 		if(x < 5) break;
 
 		if(sine_data[x-2] > sine_data[x-1] && sine_data[x-1] > sine_data[x])
 		{
 			is_falling = true;
-			hyst = (sine_data[x-1] - sine_data[x]) / 2;
-			thres_lo = sine_data[x-1] - hyst;
-			thres_hi = sine_data[x-1] + hyst;
-			end = x-1;
+			thres = sine_data[x];
+			end = x;
 			break;
 		}
 
 		if(sine_data[x-2] < sine_data[x-1] && sine_data[x-1] < sine_data[x])
 		{
 			is_rising = true;
-			hyst = (sine_data[x] - sine_data[x-1]) / 2;
-			thres_lo = sine_data[x-1] - hyst;
-			thres_hi = sine_data[x-1] + hyst;
-			end = x-1;
+			thres = sine_data[x];
+			end = x;
 			break;
 		}
 
@@ -70,21 +68,29 @@ uint16_t GetRmsRaw(uint16_t* sine_data, uint16_t size)
 	}
 
 	//find beginning of RMS sample and count edges for time states
-	x = 0;
+	x = 2;
+	uint16_t prev_trig = 0;
 	while(x < end)
 	{
-		if(is_rising && sine_data[x] < thres_lo && sine_data[x+1] > thres_hi)
+		if(is_rising && sine_data[x] > sine_data[x-1] && sine_data[x-1] < thres && sine_data[x+1] > thres)
 		{
-			start = x + 1;
-			edge_count++;
+
+			if(start == 0) start = x;
+
+			if(x > (prev_trig + 1)) wave_count++;
+
+			prev_trig = x;
+
 		}
 
-		if(is_falling && sine_data[x] > thres_hi && sine_data[x+1] < thres_lo)
+		if(is_falling && sine_data[x] < sine_data[x-1] && sine_data[x-1] > thres && sine_data[x+1] < thres )
 		{
-			start = x + 1;
-			edge_count++;
-		}
+			if(start == 0) start = x;
 
+			if(x > (prev_trig + 1)) wave_count++;
+
+			prev_trig = x;
+		}
 		x++;
 	}
 
@@ -95,13 +101,24 @@ uint16_t GetRmsRaw(uint16_t* sine_data, uint16_t size)
 		if(sine_data[i] < adc_min) adc_min = sine_data[i];
 	}
 
-	mean = (acc / (float) size);
+
+	//wave.min = adc_min;
+	//wave.max = adc_max;
+
+	mean = (acc / (float) (end - start));
 
 	double root = sqrt(mean);
 
-	return (uint16_t) (root * raw_scale);
+	uint16_t rms = (uint16_t) (root * raw_scale);
+
+	float period = (float) (end-start) / (float) wave_count;
+
+	wave_stats wave = { adc_min, adc_max, wave_count, (uint16_t) mean, rms, period };
+
+	return wave;
 
 }
+
 
 void ProcessSineInRam(uint16_t* sine_data, uint16_t size)
 {

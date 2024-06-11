@@ -144,24 +144,6 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-	  //sample_collect[sample] = out_value;
-	  //while((int) hdac.State != (int)HAL_DAC_STATE_READY);
-	  //HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, out_value);
-	  //HAL_DAC_Start(&hdac, DAC_CHANNEL_1);
-
-	  //uint32_t current_tick = HAL_GetTick();
-	  //while((int) hdac.State == (int)HAL_DAC_STATE_BUSY);
-	  //while(HAL_GetTick() < (current_tick+2));
-	  //sample = sample + 1;
-	  //if(sample >= no_samples)
-	  //{
-		//  sample = 0;
-	  //}
-	  //out_value = (uint16_t) ((sin(sample * temp_a) + 1) * temp_b);
-
-
-
-
   }
   /* USER CODE END 3 */
 }
