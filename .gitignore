@@ -48,3 +48,4 @@
 *.su
 *.su
 *.cyclo
+*.mk
