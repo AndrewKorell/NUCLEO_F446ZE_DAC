@@ -10,7 +10,6 @@
 
 extern "C"
 {
-#include "../Common/inc/testables.h"
 #include "../Common/inc/wave_data.h"
 #include "../Common/inc/sine_proc.h"
 }
