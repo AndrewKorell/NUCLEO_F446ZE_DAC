@@ -52,3 +52,4 @@ Debug/Core/Src/stm32f4xx_it.cyclo
 *.su
 *.cyclo
 *.su
+*.d
