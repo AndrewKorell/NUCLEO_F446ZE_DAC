@@ -28,7 +28,6 @@ add_executable(
 
 target_link_libraries(
 	test_main PUBLIC
-	testables
 	sine_proc
 	GTest::gtest_main
 	GTest::gtest

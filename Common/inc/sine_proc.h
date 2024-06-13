@@ -10,16 +10,25 @@
 
 typedef struct
 {
-	uint16_t min;
-	uint16_t max;
-	uint16_t no_waves;
+	uint16_t offset;
+	uint16_t peak;
+	uint16_t peak_to_peak;
 	uint16_t mean;
 	uint16_t rms;
 	float samples_per_period;
 }wave_stats;
 
-wave_stats GetRmsRaw(uint16_t* sine_data, uint16_t size);
-void ProcessSineInRam(uint16_t* sine_data, uint16_t size);
 
+typedef struct
+{
+	uint16_t start;
+	uint16_t end;
+	uint16_t size;
+	uint16_t no_waves;
+}wave_data;
+
+
+wave_data PreprocessWave(uint16_t* sine_data, uint16_t size);
+wave_stats GetRmsRaw(uint16_t* sine_data, uint16_t size);
 
 #endif /* INC_SINE_PROC_H_ */

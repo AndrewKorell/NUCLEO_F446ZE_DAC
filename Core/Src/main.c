@@ -24,6 +24,7 @@
 #include "stm32f4xx_hal.h"
 #include <stdio.h>
 #include "wave_data.h"
+#include "sine_proc.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -72,12 +73,18 @@ static void MX_ADC1_Init(void);
 /* USER CODE BEGIN PFP */
 
 static void UART2_Receive(uint8_t *rxbuffer);
+static double ADCConvertTime(ADC_HandleTypeDef *hadc);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 uint16_t adc1_data[1024];
-
+double adc1_mean;
+double adc1_conv_time;
+double adc1_period;
+double adc1_frequency;
+double adc1_rms;
+double adc1_peak_to_peak;
 
 /* USER CODE END 0 */
 
@@ -89,7 +96,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
+  adc1_conv_time =  ADCConvertTime(&hadc1);
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -241,8 +248,7 @@ static void MX_ADC1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN ADC1_Init 2 */
-// hadc1.Init.DMAContinuousRequests = ENABLE;
-// hadc1.Init.ContinuousConvMode = ENABLE;
+
 
   /* USER CODE END ADC1_Init 2 */
 
@@ -316,7 +322,7 @@ static void MX_TIM6_Init(void)
   htim6.Instance = TIM6;
   htim6.Init.Prescaler = 0;
   htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim6.Init.Period = 324;
+  htim6.Init.Period = 261;
   htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
   {
@@ -533,14 +539,54 @@ void UART2_Receive(uint8_t *rxBuffer)
 }
 
 
+/*
+ * Andrew Korell 2024-06-13
+ *
+ * Call back when 1024 items have been read from ADC1 to the DMA
+ *
+ * Print out statistics of what the wave form looks like
+ *
+ *
+ */
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
   /* Prevent unused argument(s) compilation warning */
 
 	UNUSED(hadc);
+	wave_stats wave = GetRmsRaw((uint16_t *) &adc1_data, 1024);
 
+	adc1_mean = wave.mean * (3.6 / 4096.0);
+
+	adc1_peak_to_peak = wave.peak_to_peak * (3.6 / 4096.0);
+
+	adc1_rms = wave.rms * (3.6 / 4096.0);
+
+	adc1_period = wave.samples_per_period * adc1_conv_time;
+
+	adc1_frequency = 1.0 / adc1_period;
 
 }
+
+
+/*
+ * Andrew Korell 2024-06-13
+ *
+ * Trying to create something more dynamic for calculating the period of the waveform read in an ADC
+ * The data should be available in HAL
+ *
+ */
+double ADCConvertTime(ADC_HandleTypeDef *hadc)
+{
+
+
+	//double bits = 12.0; // ? hadc->Init.Resolution == ADC_RESOLUTION_12B : 8.0;
+	//double sample_time = 3.0;
+	//double prescale = 4.0; //Todo: Need an implementation for this
+
+	//(Bits + Conv_Time_in_Clicks) * 1 / (PCLK2 / ADC_Prescaler )
+	return (15.0) * (1.0 / (double) 21000000);
+}
+
 
 /* USER CODE END 4 */
 
