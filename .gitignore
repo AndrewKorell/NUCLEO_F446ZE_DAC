@@ -43,12 +43,10 @@
 
 # Libraries
 /lib
-/Debug
-/Debug
-Debug/Core/Src/main.su
-Debug/Core/Src/stm32f4xx_hal_msp.cyclo
-Debug/Core/Src/stm32f4xx_hal_msp.su
-Debug/Core/Src/stm32f4xx_it.cyclo
 *.su
 *.cyclo
 *.su
+*.su
+*.cyclo
+*.mk
+*.d

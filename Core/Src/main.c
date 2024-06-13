@@ -23,6 +23,8 @@
 /* USER CODE BEGIN Includes */
 #include "stm32f4xx_hal.h"
 #include <stdio.h>
+#include "wave_data.h"
+#include "sine_proc.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -71,18 +73,18 @@ static void MX_ADC1_Init(void);
 /* USER CODE BEGIN PFP */
 
 static void UART2_Receive(uint8_t *rxbuffer);
+static double ADCConvertTime(ADC_HandleTypeDef *hadc);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 uint16_t adc1_data[1024];
-uint16_t zero_crossing_count = 0;
-uint16_t adc_data;
-uint16_t adc_max = 2048;
-uint16_t adc_min = 2048;
-const uint32_t adc_thres = 200;
-uint16_t adc_thr_stp = 0;
-uint16_t adc_pp;
+double adc1_mean;
+double adc1_conv_time;
+double adc1_period;
+double adc1_frequency;
+double adc1_rms;
+double adc1_peak_to_peak;
 
 /* USER CODE END 0 */
 
@@ -94,7 +96,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
+  adc1_conv_time =  ADCConvertTime(&hadc1);
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -128,8 +130,7 @@ int main(void)
   uint8_t dataBuffer[bufferSize];
   HAL_UART_Receive_IT(&huart2, dataBuffer, bufferSize);
 
-  const uint32_t sinewave_data[32] = {2048, 2447, 2831, 3185, 3495, 3750, 3939, 4056, 4095, 4057, 3940, 3752, 3497, 3188, 2834, 2450, 2051, 1651, 1267, 913, 602, 347, 157, 40, 0, 38, 153, 342, 595, 905, 1258, 1642 };
-  HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, (uint32_t *) sinewave_data, 32, DAC_ALIGN_12B_R);
+  HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, (uint32_t *) sinewave_data, sinewave_len, DAC_ALIGN_12B_R);
   HAL_TIM_Base_Start_IT(&htim6);
   /* USER CODE END 2 */
 
@@ -149,24 +150,6 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-
-	  //sample_collect[sample] = out_value;
-	  //while((int) hdac.State != (int)HAL_DAC_STATE_READY);
-	  //HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, out_value);
-	  //HAL_DAC_Start(&hdac, DAC_CHANNEL_1);
-
-	  //uint32_t current_tick = HAL_GetTick();
-	  //while((int) hdac.State == (int)HAL_DAC_STATE_BUSY);
-	  //while(HAL_GetTick() < (current_tick+2));
-	  //sample = sample + 1;
-	  //if(sample >= no_samples)
-	  //{
-		//  sample = 0;
-	  //}
-	  //out_value = (uint16_t) ((sin(sample * temp_a) + 1) * temp_b);
-
-
-
 
   }
   /* USER CODE END 3 */
@@ -265,8 +248,7 @@ static void MX_ADC1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN ADC1_Init 2 */
-// hadc1.Init.DMAContinuousRequests = ENABLE;
-// hadc1.Init.ContinuousConvMode = ENABLE;
+
 
   /* USER CODE END ADC1_Init 2 */
 
@@ -340,7 +322,7 @@ static void MX_TIM6_Init(void)
   htim6.Instance = TIM6;
   htim6.Init.Prescaler = 0;
   htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim6.Init.Period = 324;
+  htim6.Init.Period = 261;
   htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
   {
@@ -557,46 +539,54 @@ void UART2_Receive(uint8_t *rxBuffer)
 }
 
 
+/*
+ * Andrew Korell 2024-06-13
+ *
+ * Call back when 1024 items have been read from ADC1 to the DMA
+ *
+ * Print out statistics of what the wave form looks like
+ *
+ *
+ */
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
   /* Prevent unused argument(s) compilation warning */
 
 	UNUSED(hadc);
-	volatile uint32_t period_step = 0;
-	adc_max = 2048;
-	adc_min = 2048;
-	adc_thr_stp = 0;
-	zero_crossing_count = 0;
+	wave_stats wave = GetRmsRaw((uint16_t *) &adc1_data, 1024);
 
-	for(uint16_t i = 0; i < 1024; i++)
-	{
-		adc_data = adc1_data[i];
-		//printf("%d\n", adc_data);
+	adc1_mean = wave.mean * (3.6 / 4096.0);
 
-		if(adc1_data[i] > adc_max)
-		{
-			adc_max = adc_data;
-			//printf("new max %d", (uint16_t) adc_max);
-		}
-		else if(adc1_data[i] < adc_min)
-		{
-			adc_min = adc1_data[i];
-			//printf("new min %d", (uint16_t) adc_min);
-		}
+	adc1_peak_to_peak = wave.peak_to_peak * (3.6 / 4096.0);
 
-		//measure period by counting steps between points where adc_thres is crossed
-		//in an upward direction.
-		if((i > 0) && (adc1_data[i] > (adc_thres + 10)) && (adc1_data[i-1] <= (adc_thres - 10)))
-		{
-			zero_crossing_count++;
-			adc_thr_stp = period_step;
-			period_step = 0;
-		}
-		period_step++;
+	adc1_rms = wave.rms * (3.6 / 4096.0);
 
-	}
+	adc1_period = wave.samples_per_period * adc1_conv_time;
+
+	adc1_frequency = 1.0 / adc1_period;
 
 }
+
+
+/*
+ * Andrew Korell 2024-06-13
+ *
+ * Trying to create something more dynamic for calculating the period of the waveform read in an ADC
+ * The data should be available in HAL
+ *
+ */
+double ADCConvertTime(ADC_HandleTypeDef *hadc)
+{
+
+
+	//double bits = 12.0; // ? hadc->Init.Resolution == ADC_RESOLUTION_12B : 8.0;
+	//double sample_time = 3.0;
+	//double prescale = 4.0; //Todo: Need an implementation for this
+
+	//(Bits + Conv_Time_in_Clicks) * 1 / (PCLK2 / ADC_Prescaler )
+	return (15.0) * (1.0 / (double) 21000000);
+}
+
 
 /* USER CODE END 4 */
 
