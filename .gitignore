@@ -50,3 +50,4 @@
 *.cyclo
 *.mk
 *.d
+/build
