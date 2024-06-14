@@ -1,0 +1,26 @@
+name: test
+
+on:
+  push
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install googletest not macOs
+        uses: ./ #install container
+      - name: build step 1
+        run: cmake -S . -B build 
+        working-directory: .
+      - name: build step 2
+        run: cmake --build build
+        working-directory: .
+      - name: run ctest
+        run: ctest
+        working-directory: build/testing
