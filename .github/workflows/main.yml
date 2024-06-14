@@ -23,4 +23,4 @@ jobs:
         working-directory: .
       - name: run ctest
         run: ctest
-        working-directory: build/testing
+        working-directory: build/Testing
